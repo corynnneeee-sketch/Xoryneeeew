@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Upload to Google Drive</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 50px;
+      background: #f0f0f0;
+    }
+    .container {
+      background: #fff;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      width: 400px;
+    }
+    h1 { text-align: center; }
+    input, textarea, button {
+      width: 100%;
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      cursor: pointer;
+      background: #4CAF50;
+      color: white;
+      border: none;
+    }
+    ul { list-style: none; padding: 0; }
+    li { margin: 0.3rem 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Upload to Google Drive</h1>
+    <textarea id="textInput" rows="4" placeholder="Enter text here..."></textarea>
+    <input type="file" id="fileInput" accept=".txt,.pdf,image/*">
+    <button id="submitBtn">Upload</button>
+    
+    <h2>Uploaded Files</h2>
+    <ul id="fileList"></ul>
+  </div>
+
+  <script>
+    // ==== GOOGLE API SETUP ====
+    // 1. Create a Google Cloud Project
+    // 2. Enable Google Drive API
+    // 3. Create OAuth 2.0 Client ID for Web
+    // 4. Copy the CLIENT_ID below and paste
+    const CLIENT_ID = "YOUR_CLIENT_ID_HERE";
+    const API_KEY = "YOUR_API_KEY_HERE";
+    const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+    const SCOPES = "https://www.googleapis.com/auth/drive.file";
+
+    // Load the Google API Client Library
+    function loadGapi() {
+      return new Promise((resolve) => {
+        const script = document.createElement("script");
+        script.src = "https://apis.google.com/js/api.js";
+        script.onload = resolve;
+        document.body.appendChild(script);
+      });
+    }
+
+    async function initClient() {
+      await new Promise(r => gapi.load('client:auth2', r));
+      await gapi.client.init({
+        apiKey: API_KEY,
+        clientId: CLIENT_ID,
+        discoveryDocs: DISCOVERY_DOCS,
+        scope: SCOPES
+      });
+      gapi.auth2.getAuthInstance().signIn();
+    }
+
+    function uploadFile(file, callback) {
+      const metadata = {
+        name: file.name,
+        mimeType: file.type || "text/plain"
+      };
+      const form = new FormData();
+      form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+      form.append("file", file);
+
+      fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name", {
+        method: "POST",
+        headers: new Headers({ "Authorization": "Bearer " + gapi.auth.getToken().access_token }),
+        body: form
+      })
+      .then(response => response.json())
+      .then(callback)
+      .catch(console.error);
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", async () => {
+      const text = document.getElementById("textInput").value.trim();
+      const fileInput = document.getElementById("fileInput");
+      await initClient();
+
+      if (text) {
+        const blob = new Blob([text], { type: "text/plain" });
+        const txtFile = new File([blob], "text.txt", { type: "text/plain" });
+        uploadFile(txtFile, addFileToList);
+      }
+
+      if (fileInput.files.length) {
+        Array.from(fileInput.files).forEach(file => {
+          uploadFile(file, addFileToList);
+        });
+      }
+    });
+
+    function addFileToList(fileData) {
+      const ul = document.getElementById("fileList");
+      const li = document.createElement("li");
+      li.innerHTML = `<a href="https://drive.google.com/uc?id=${fileData.id}" target="_blank">${fileData.name}</a>`;
+      ul.appendChild(li);
+    }
+  </script>
+</body>
+</html>
